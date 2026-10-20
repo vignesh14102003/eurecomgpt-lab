@@ -1,21 +1,17 @@
+
 #!/usr/bin/env python3
 """Phase 0 self-check — probes your environment and writes a submission report.
 
-Run this from the repository root once you have finished the setup tasks::
+Run this from the repository root once you have finished the setup tasks:
 
     python phase-0-setup/verify_setup.py
 
-It inspects your machine (Python version, gcloud config, Docker, git remote) and
-writes ``submission/phase0_report.json``. Commit that file and push — your CI and the
-instructor grade it.
+It inspects Python, gcloud config, Docker, and the Git remote,
+then writes submission/phase0_report.json.
 
-Two small functions are left for YOU to implement (search for ``TODO``):
-
-  * ``parse_gcloud_config`` — pull the account + project out of ``gcloud`` JSON output.
-  * ``parse_repo_slug``     — turn a git remote URL into ``owner/repo``.
-
-Everything else is provided. These are pure functions (input string in, value out),
-so you can test them without touching the cloud — see ``tests/test_units.py``.
+The two implemented functions are:
+    parse_gcloud_config()
+    parse_repo_slug()
 """
 
 from __future__ import annotations
@@ -23,9 +19,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
-# Make the shared `autograder` package importable when run from anywhere.
+# Make the shared autograder package importable when run from anywhere.
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -34,49 +32,84 @@ from autograder import env_checks  # noqa: E402
 REPORT_PATH = REPO_ROOT / "submission" / "phase0_report.json"
 
 
-# --------------------------------------------------------------------------- #
-# Functions YOU implement
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Phase 0: Implemented functions
+# ---------------------------------------------------------------------------
+
 def parse_gcloud_config(raw: str) -> dict:
-    """Parse the JSON emitted by ``gcloud config list --format=json``.
+    """Extract the account and project from gcloud JSON output."""
 
-    Return ``{"account": <str>, "project": <str>}`` using empty strings when a
-    value is absent. The relevant fields live under the ``"core"`` section, e.g.::
+    if not isinstance(raw, str) or not raw.strip():
+        return {"account": "", "project": ""}
 
-        {"core": {"account": "you@example.com", "project": "my-proj-123"}}
+    try:
+        config = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return {"account": "", "project": ""}
 
-    Args:
-        raw: the raw stdout string from the gcloud command (may be empty).
-    """
-    # TODO: parse `raw` as JSON and return {"account": ..., "project": ...}
-    #       from the "core" section. Return empty strings if raw is empty or a
-    #       field is missing.
-    raise NotImplementedError("Phase 0: implement parse_gcloud_config()")
+    if not isinstance(config, dict):
+        return {"account": "", "project": ""}
+
+    core = config.get("core", {})
+
+    if not isinstance(core, dict):
+        core = {}
+
+    return {
+        "account": str(core.get("account") or ""),
+        "project": str(core.get("project") or ""),
+    }
 
 
 def parse_repo_slug(remote_url: str) -> str:
-    """Turn a GitHub remote URL into an ``owner/repo`` slug (no ``.git`` suffix).
+    """Convert a GitHub remote URL into owner/repo format."""
 
-    Must handle both forms git prints:
+    if not isinstance(remote_url, str) or not remote_url.strip():
+        return ""
 
-      * HTTPS: ``https://github.com/eurecom/clouds-lab.git``  -> ``eurecom/clouds-lab``
-      * SSH:   ``git@github.com:eurecom/clouds-lab.git``      -> ``eurecom/clouds-lab``
+    remote_url = remote_url.strip()
 
-    Return ``""`` if the URL is empty or not a github.com URL.
+    # Handle SSH URLs in SCP-style format:
+    # git@github.com:owner/repo.git
+    if remote_url.startswith("git@github.com:"):
+        path = remote_url[len("git@github.com:"):]
 
-    Args:
-        remote_url: output of ``git remote get-url origin`` (may be empty).
-    """
-    # TODO: return "owner/repo" for both the HTTPS and SSH forms shown above.
-    #       Strip any trailing ".git". Return "" if not a github.com URL.
-    raise NotImplementedError("Phase 0: implement parse_repo_slug()")
+    else:
+        # Handle HTTPS and ssh:// URLs.
+        parsed = urlparse(remote_url)
+
+        if (
+            parsed.hostname != "github.com"
+            or parsed.scheme not in {"https", "http", "ssh"}
+        ):
+            return ""
+
+        path = parsed.path.lstrip("/")
+
+    # Remove URL query strings and fragments.
+    path = path.split("?", 1)[0].split("#", 1)[0]
+    path = path.strip("/")
+
+    # Remove the optional .git suffix.
+    if path.endswith(".git"):
+        path = path[:-4]
+
+    parts = path.split("/")
+
+    # A valid repository path must contain owner and repository.
+    if len(parts) != 2 or not all(parts):
+        return ""
+
+    return f"{parts[0]}/{parts[1]}"
 
 
-# --------------------------------------------------------------------------- #
-# Provided probes (do not modify)
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Provided environment checks
+# ---------------------------------------------------------------------------
+
 def check_python() -> dict:
     major, minor, micro = env_checks.python_version()
+
     return {
         "version": f"{major}.{minor}.{micro}",
         "ok": env_checks.python_is_supported(),
@@ -84,32 +117,58 @@ def check_python() -> dict:
 
 
 def check_environment() -> dict:
-    """Record where this ran. Cloud Shell is the mandated dev environment; local is allowed."""
-    return {"cloud_shell": env_checks.in_cloud_shell()}
+    """Record whether the script is running in Cloud Shell."""
+
+    return {
+        "cloud_shell": env_checks.in_cloud_shell()
+    }
 
 
 def check_gcloud() -> dict:
-    code, out, err = env_checks.run(["gcloud", "config", "list", "--format=json"])
+    code, out, err = env_checks.run(
+        ["gcloud", "config", "list", "--format=json"]
+    )
+
     if code != 0:
-        return {"account": "", "project": "", "error": err or "gcloud not found"}
+        return {
+            "account": "",
+            "project": "",
+            "error": err or "gcloud not found",
+        }
+
     try:
         parsed = parse_gcloud_config(out)
     except NotImplementedError as exc:
-        return {"account": "", "project": "", "error": str(exc)}
-    return {"account": parsed["account"], "project": parsed["project"], "error": None}
+        return {
+            "account": "",
+            "project": "",
+            "error": str(exc),
+        }
+
+    return {
+        "account": parsed["account"],
+        "project": parsed["project"],
+        "error": None,
+    }
 
 
 def check_docker() -> dict:
     code, out, err = env_checks.run(["docker", "--version"])
-    return {"version": out if code == 0 else "", "present": code == 0}
+
+    return {
+        "version": out if code == 0 else "",
+        "present": code == 0,
+    }
 
 
 def check_git() -> dict:
     url = env_checks.git_remote_url()
+
     try:
         slug = parse_repo_slug(url)
     except NotImplementedError:
         slug = ""
+
     return {
         "remote": url,
         "is_github": "github.com" in url,
@@ -137,24 +196,57 @@ def _print_summary(report: dict) -> None:
     dk = report["docker"]
     gt = report["git"]
     env = report["environment"]
+
     print("Phase 0 environment check")
     print("-" * 40)
+
     where = "Cloud Shell" if env["cloud_shell"] else "local machine"
     print(f"[OK  ] Running on: {where}")
-    print(f"[{mark(py['ok'])}] Python {py['version']} (need 3.11 or 3.12)")
-    print(f"[{mark(bool(gc['account']))}] gcloud account: {gc['account'] or '(unset)'}")
-    print(f"[{mark(bool(gc['project']))}] gcloud project: {gc['project'] or '(unset)'}")
-    print(f"[{mark(dk['present'])}] {dk['version'] or 'docker not found'}")
-    print(f"[{mark(gt['is_github'])}] git remote: {gt['remote'] or '(unset)'}")
+
+    print(
+        f"[{mark(py['ok'])}] Python {py['version']} "
+        "(need 3.11 or 3.12)"
+    )
+
+    print(
+        f"[{mark(bool(gc['account']))}] "
+        f"gcloud account: {gc['account'] or '(unset)'}"
+    )
+
+    print(
+        f"[{mark(bool(gc['project']))}] "
+        f"gcloud project: {gc['project'] or '(unset)'}"
+    )
+
+    print(
+        f"[{mark(dk['present'])}] "
+        f"{dk['version'] or 'docker not found'}"
+    )
+
+    print(
+        f"[{mark(gt['is_github'])}] "
+        f"git remote: {gt['remote'] or '(unset)'}"
+    )
+
     print("-" * 40)
 
 
 def main() -> int:
     report = build_report()
+
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    REPORT_PATH.write_text(
+        json.dumps(report, indent=2),
+        encoding="utf-8",
+    )
+
     _print_summary(report)
-    print(f"\nWrote {REPORT_PATH.relative_to(REPO_ROOT)} — commit it and push.")
+
+    print(
+        f"\nWrote {REPORT_PATH.relative_to(REPO_ROOT)} — commit it and push."
+    )
+
     return 0
 
 
