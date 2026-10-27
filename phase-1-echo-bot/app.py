@@ -1,10 +1,11 @@
+
 #!/usr/bin/env python3
 """EurecomGPT echo bot — a ~50-line Flask service.
 
 This one app is deployed three ways in Phase 1 (an IaaS VM, Cloud Run, and — via
-``main.py`` — a Cloud Function), so you can compare the service models hands-on.
+main.py — a Cloud Function), so you can compare the service models hands-on.
 
-You implement two small pure functions (search for ``TODO``); the routes are provided
+You implement two small pure functions (search for TODO); the routes are provided
 and call them. Run the offline unit tests as you go:
 
     python -m pytest phase-1-echo-bot/tests/test_units.py -p autograder.points -q
@@ -25,23 +26,33 @@ def build_echo(message: str) -> dict:
 
     Must return exactly ``{"echo": <message>, "length": <len of message>}``.
     """
-    # TODO: return {"echo": message, "length": len(message)}
-    raise NotImplementedError("Phase 1: implement build_echo()")
+    return {"echo": message, "length": len(message)}
 
 
 def extract_message(args, json_body) -> str | None:
     """Pull the user's message out of a request.
 
-    Accept either a query parameter ``msg`` (GET) or a JSON body ``{"message": ...}``
-    (POST). Return the string, or ``None`` if neither is present.
+    Accept either a query parameter ``msg`` (GET) or a JSON body
+    ``{"message": ...}`` (POST). Return the string, or ``None`` if neither
+    is present.
 
     Args:
         args: request.args (a mapping with ``.get``), e.g. ``{"msg": "hi"}``.
         json_body: parsed JSON body or ``None``, e.g. ``{"message": "hi"}``.
     """
-    # TODO: return args["msg"] if present, else json_body["message"] if present,
-    #       else None. Use .get() so missing keys don't raise.
-    raise NotImplementedError("Phase 1: implement extract_message()")
+    # Prefer the query parameter when it is present.
+    message = args.get("msg")
+    if message is not None:
+        return message
+
+    # Otherwise, try the JSON body.
+    if isinstance(json_body, dict):
+        message = json_body.get("message")
+        if message is not None:
+            return message
+
+    # Neither source contains a message.
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -66,7 +77,9 @@ def health():
 def echo():
     message = extract_message(request.args, request.get_json(silent=True))
     if message is None:
-        return jsonify({"error": "provide ?msg=... or JSON {\"message\": ...}"}), 400
+        return jsonify(
+            {"error": "provide ?msg=... or JSON {\"message\": ...}"}
+        ), 400
     return jsonify(build_echo(message))
 
 
