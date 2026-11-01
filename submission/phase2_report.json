@@ -1,0 +1,30 @@
+{
+  "phase": "2",
+  "environment": {
+    "colab": true
+  },
+  "attention": {
+    "naive_ms": 460.339,
+    "vectorized_ms": 0.917,
+    "speedup": 502.01
+  },
+  "threads": {
+    "1": 2190.071,
+    "2": 2282.54,
+    "4": 2174.354,
+    "8": 2262.978
+  },
+  "devices": {
+    "cpu_ms": 469675.5,
+    "gpu_ms": 12716.7
+  },
+  "training": {
+    "steps": 2000,
+    "final_loss": 1.5074,
+    "param_count": 4935680
+  },
+  "sample": "\n\nMARIANAN:\nNo; not Lord mord, Bornablack:\nSo talk Dorbiar, upon go son! This flower\nTo better he vinture.' Got id to thim not teble\nAs I experforted till thee hands: eversed ha--\nHow should be in the ",
+  "model": {
+    "gcs_url": "https://storage.googleapis.com/eurecomcgpt-vigneshramkumar-eurecomgpt/model.safetensors"
+  }
+}
